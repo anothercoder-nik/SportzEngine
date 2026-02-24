@@ -8,6 +8,13 @@
       "when": 1771787246372,
       "tag": "0000_mixed_lord_hawal",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1771882386849,
+      "tag": "0001_sad_chamber",
+      "breakpoints": true
     }
   ]
 }
