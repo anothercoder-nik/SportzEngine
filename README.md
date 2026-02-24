@@ -1,361 +1,385 @@
-# 🏏🏈 Live Sports API Integration Guide
+# ⚡ SportzEngine
 
-> How to replace your dummy seed data with **real-time live scores and commentary** from free sports APIs.
+> **Real-time sports match tracking & live commentary engine powered by WebSockets**
 
----
+A full-stack application delivering live match scores, ball-by-ball commentary, and real-time updates using WebSockets. Features Arcjet-powered security, APM monitoring, and a sophisticated seed system for simulating live match feeds.
 
-## 📌 Overview
+<br/>
 
-Your SportzEngine backend is already built for real-time updates. Currently you use `seed.js` to simulate commentary. To go live, you need to:
-
-1. **Poll a sports API** for live match data on a timer (every 10–30 seconds)
-2. **INSERT new commentary** into your Neon database
-3. **Broadcast via WebSocket** — your existing `broadcastMatchCreated()` handles this
-
-The only new code you need is a **poller service** that replaces `seed.js`.
-
----
-
-## 🆓 Free Sports APIs
-
-### 🏏 Cricket (Indian Sports — IPL, International)
-
-#### 1. CricAPI (cricapi.com)
-
-| Detail       | Info                                                     |
-|--------------|----------------------------------------------------------|
-| **URL**      | https://www.cricapi.com                                  |
-| **Free Tier**| 100 requests/day                                         |
-| **Coverage** | IPL, International Tests, ODIs, T20s                     |
-| **Auth**     | API Key (sign up required)                               |
-| **Docs**     | https://www.cricapi.com/how-to-use.aspx                  |
-
-**Key Endpoints:**
+## 🏗️ Architecture
 
 ```
-GET https://api.cricapi.com/v1/currentMatches?apikey=YOUR_KEY
-GET https://api.cricapi.com/v1/match_scorecard?apikey=YOUR_KEY&id=MATCH_ID
+┌───────────────────────┐       WebSocket (wss://)        ┌───────────────────────┐
+│                       │ ◄──────────────────────────────► │                       │
+│   React Frontend      │       REST API (https://)        │   Express Backend     │
+│   (Vite + TypeScript) │ ◄──────────────────────────────► │   (Node.js + ESM)     │
+│                       │                                  │                       │
+└───────────────────────┘                                  └───────────┬───────────┘
+                                                                       │
+                                                              ┌────────┼────────┐
+                                                              ▼        ▼        ▼
+                                                         ┌─────────┐ ┌─────┐ ┌──────┐
+                                                         │ Neon DB │ │Arcjet│ │ APM  │
+                                                         │ (PgSQL) │ │Shield│ │Insight│
+                                                         └─────────┘ └─────┘ └──────┘
 ```
 
-**Sample Response:**
+<br/>
+
+## ✨ Features
+
+- **Real-time match updates** via WebSocket push (match creation + commentary)
+- **Live commentary feed** — ball-by-ball or minute-by-minute updates with auto-scrolling
+- **Match cards** with scores, teams, sport tags (Cricket, Football, Basketball)
+- **Match subscription model** — watch/unwatch individual matches
+- **Arcjet security** — rate limiting, bot detection, and shield protection (dev/prod modes)
+- **APM monitoring** via Site24x7 APMInsight for production observability
+- **Seed system** — simulate live match feeds from JSON data across multiple matches
+- **Heartbeat ping/pong** to detect and clean up stale WebSocket connections
+- **Database indexes** on `matches` and `commentary` tables for optimized queries
+- **CORS enabled** for cross-origin frontend deployments
+- **Connection status indicator** — instantly see if you're connected
+
+<br/>
+
+## 🛠️ Tech Stack
+
+| Layer       | Technology                                    |
+|-------------|-----------------------------------------------|
+| Frontend    | React 19, TypeScript, Vite                    |
+| Backend     | Express 5, Node.js (ESM)                      |
+| WebSocket   | `ws` library                                  |
+| Database    | PostgreSQL (Neon — serverless)                 |
+| ORM         | Drizzle ORM + Drizzle Kit                     |
+| Validation  | Zod                                           |
+| Security    | Arcjet (rate limiting, bot detection, shield)  |
+| Monitoring  | Site24x7 APMInsight                           |
+| Deployment  | Render / Railway                               |
+
+<br/>
+
+## 📁 Project Structure
+
+```
+SportzEngine/
+├── backend/
+│   ├── index.js                     # Express + HTTP + WebSocket entry point
+│   ├── apminsightnode.json          # APM agent configuration
+│   ├── drizzle.config.js            # Drizzle Kit configuration
+│   ├── package.json
+│   ├── RAILWAY_DEPLOYMENT_GUIDE.md  # Step-by-step Railway deploy guide
+│   └── src/
+│       ├── arcjet.js                # Arcjet security (rate limit, shield, bot detection)
+│       ├── db/
+│       │   ├── db.js                # PostgreSQL pool + Drizzle instance
+│       │   └── schema.js            # matches & commentary tables (with indexes)
+│       ├── data/
+│       │   └── data.json            # Seed data: 18 matches + 1080 commentary entries
+│       ├── router/
+│       │   ├── matches.js           # REST: GET/POST matches, PATCH score
+│       │   └── commentary.js        # REST: GET/POST commentary per match
+│       ├── seed/
+│       │   └── seed.js              # Match feed simulator (seeds via API)
+│       ├── utils/
+│       │   └── match-status.js      # Match status helpers
+│       ├── validation/
+│       │   ├── matches.js           # Zod schemas for match payloads
+│       │   └── commentary.js        # Zod schemas for commentary payloads
+│       └── ws/
+│           └── server.js            # WebSocket server (attach, broadcast, heartbeat)
+│
+└── frontend/sportz-frontend/
+    ├── index.html
+    ├── App.tsx                      # Main application component
+    ├── constants.ts                 # API & WS base URLs from env vars
+    ├── types.ts                     # TypeScript interfaces
+    ├── components/
+    │   ├── MatchCard.tsx            # Individual match card UI
+    │   ├── LiveFeed.tsx             # Real-time commentary panel
+    │   └── StatusIndicator.tsx      # WebSocket connection indicator
+    ├── hooks/
+    │   ├── useMatchData.ts          # Match data fetching + state management
+    │   └── useWebSocket.ts          # WebSocket connection hook
+    └── services/
+        └── api.ts                   # REST API service layer
+```
+
+<br/>
+
+## 🗄️ Database Schema
+
+```sql
+┌─────────────────────────────────┐       ┌─────────────────────────────────┐
+│           matches               │       │          commentary             │
+├─────────────────────────────────┤       ├─────────────────────────────────┤
+│ id          SERIAL    PK        │◄──────│ match_id   INTEGER   FK → id   │
+│ sport       TEXT      NOT NULL  │       │ id         SERIAL    PK        │
+│ home_team   TEXT      NOT NULL  │       │ minute     INTEGER             │
+│ away_team   TEXT      NOT NULL  │       │ sequence   INTEGER             │
+│ status      ENUM      DEFAULT   │       │ period     TEXT                │
+│             'scheduled'         │       │ event_type TEXT                │
+│ start_time  TIMESTAMP           │       │ actor      TEXT                │
+│ end_time    TIMESTAMP           │       │ team       TEXT                │
+│ home_score  INTEGER   DEFAULT 0 │       │ message    TEXT      NOT NULL  │
+│ away_score  INTEGER   DEFAULT 0 │       │ metadata   JSONB               │
+│ created_at  TIMESTAMP DEFAULT   │       │ tags       TEXT[]              │
+│             NOW()               │       │ created_at TIMESTAMP DEFAULT   │
+│                                 │       │            NOW()               │
+│ 📇 INDEX: created_at           │       │                                 │
+│ 📇 INDEX: status               │       │ 📇 INDEX: match_id             │
+└─────────────────────────────────┘       │ 📇 INDEX: created_at           │
+                                          └─────────────────────────────────┘
+```
+
+<br/>
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- **Node.js** v18+
+- **npm** v9+
+- A **Neon** PostgreSQL database ([neon.tech](https://neon.tech))
+- An **Arcjet** API key ([arcjet.com](https://arcjet.com)) — for security features
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/anothercoder-nik/SportzEngine.git
+cd SportzEngine
+```
+
+### 2. Setup Backend
+
+```bash
+cd backend
+npm install
+```
+
+Create a `.env` file:
+
+```env
+# Database
+DATABASE_URL=postgresql://user:pass@your-neon-host/dbname?sslmode=require
+
+# Server
+PORT=8000
+HOST=0.0.0.0
+
+# Arcjet Security
+ARCJET_KEY=your_arcjet_key_here
+ARCJET_MODE=development
+ARCJET_ENV=development
+NODE_ENV=development
+
+# Seed Configuration
+API_URL="http://localhost:8000"
+DELAY_MS="250"
+```
+
+Run database migrations:
+
+```bash
+npm run db:generate
+npm run db:migrate
+```
+
+Start the server:
+
+```bash
+# Development (with hot-reload)
+npm run dev
+
+# Production
+npm start
+```
+
+The server will be running at `http://localhost:8000` with WebSocket at `ws://localhost:8000/ws`.
+
+### 3. Seed the Database
+
+With the server running, open a new terminal:
+
+```bash
+npm run seed
+```
+
+This reads `src/data/data.json` (18 matches across football, cricket, basketball) and inserts commentary entries one-by-one via the API, simulating a live feed with a 250ms delay between events.
+
+### 4. Setup Frontend
+
+```bash
+cd frontend/sportz-frontend
+npm install
+```
+
+Create a `.env` file:
+
+```env
+# Local Development
+VITE_API_BASE_URL="http://localhost:8000"
+VITE_WS_BASE_URL="ws://localhost:8000/ws"
+```
+
+Start the dev server:
+
+```bash
+npm run dev
+```
+
+The frontend will be available at `http://localhost:5173`.
+
+<br/>
+
+## 🔒 Security (Arcjet)
+
+Arcjet provides three layers of protection with **separate configurations for development and production**:
+
+| Feature         | Development         | Production                                   |
+|-----------------|---------------------|----------------------------------------------|
+| **Rate Limit**  | ✅ 50 req/10s (HTTP) | ✅ 50 req/10s (HTTP)                         |
+| **WS Rate Limit** | ✅ 5 req/2s       | ✅ 5 req/2s                                   |
+| **Shield**      | ❌ Disabled          | ✅ Active                                     |
+| **Bot Detection** | ❌ Disabled        | ✅ Active (allows search engines & previews)  |
+
+Toggle via `ARCJET_MODE` in `.env`. The security middleware is currently commented out in `index.js` — uncomment `app.use(securityMiddleware())` to enable.
+
+<br/>
+
+## 🔌 WebSocket Protocol
+
+### Connection
+
+Connect to `ws://localhost:8000/ws`. On successful connection, the server sends:
 
 ```json
-{
-  "data": [
-    {
-      "id": "d108ff0c-5243-4e5c-8b8d-c4e1e959c4b0",
-      "name": "India vs Australia, 3rd Test",
-      "status": "India lead by 42 runs",
-      "score": [
-        { "r": 263, "w": 10, "o": 78.2, "inning": "India 1st Innings" },
-        { "r": 221, "w": 10, "o": 68.4, "inning": "Australia 1st Innings" }
-      ]
-    }
-  ]
-}
+{ "type": "welcome", "payload": { "message": "Welcome to the WebSocket Server" } }
 ```
 
----
+### Server → Client Events
 
-#### 2. CricketData.org
+| Event Type         | Description                          | Payload             |
+|--------------------|--------------------------------------|---------------------|
+| `welcome`          | Sent on connection                   | `{ message }`       |
+| `match.created`    | New match added to the system        | Full match object   |
+| `commentary.added` | New commentary for a subscribed match | Commentary object  |
 
-| Detail       | Info                                               |
-|--------------|----------------------------------------------------|
-| **URL**      | https://cricketdata.org                            |
-| **Free Tier**| 100 requests/day                                   |
-| **Coverage** | International + domestic cricket                   |
-| **Auth**     | API Key                                            |
-| **Docs**     | https://cricketdata.org/docs                       |
+### Heartbeat
 
-**Key Endpoints:**
+The server sends a `ping` every **30 seconds**. Clients that don't respond with `pong` are automatically terminated.
 
-```
-GET https://api.cricketdata.org/v1/currentMatches?apikey=YOUR_KEY
-GET https://api.cricketdata.org/v1/match_info?apikey=YOUR_KEY&id=MATCH_ID
-```
+<br/>
 
----
+## 📡 REST API Endpoints
 
-### ⚽ Football (Soccer — Premier League, La Liga, World Cup)
+### Matches
 
-#### 3. Football-Data.org
+| Method | Endpoint               | Description                    |
+|--------|------------------------|--------------------------------|
+| GET    | `/matches`             | List matches (with `?limit=N`) |
+| POST   | `/matches`             | Create a new match             |
+| PATCH  | `/matches/:id/score`   | Update match score (live only) |
 
-| Detail       | Info                                               |
-|--------------|----------------------------------------------------|
-| **URL**      | https://www.football-data.org                      |
-| **Free Tier**| 10 requests/min, covers major leagues              |
-| **Coverage** | Premier League, La Liga, Serie A, Bundesliga, UCL  |
-| **Auth**     | API Key (header: `X-Auth-Token`)                   |
-| **Docs**     | https://www.football-data.org/documentation        |
+### Commentary
 
-**Key Endpoints:**
+| Method | Endpoint                          | Description                        |
+|--------|-----------------------------------|------------------------------------|
+| GET    | `/matches/:id/commentary`         | List commentary (with `?limit=N`)  |
+| POST   | `/matches/:id/commentary`         | Add commentary entry               |
 
-```
-GET https://api.football-data.org/v4/matches           # Today's matches
-GET https://api.football-data.org/v4/matches/{id}      # Single match detail
-GET https://api.football-data.org/v4/competitions/PL/matches?status=LIVE
-```
+<br/>
 
-**Sample Response:**
+## 📦 Available Scripts
 
-```json
-{
-  "matches": [
-    {
-      "id": 436882,
-      "homeTeam": { "name": "Manchester City" },
-      "awayTeam": { "name": "Arsenal" },
-      "score": {
-        "fullTime": { "home": 2, "away": 1 }
-      },
-      "status": "IN_PLAY",
-      "minute": 67
-    }
-  ]
-}
-```
+### Backend
 
----
+| Script               | Command                      | Description                        |
+|----------------------|------------------------------|------------------------------------|
+| `npm start`          | `node index.js`              | Start production server            |
+| `npm run dev`        | `nodemon index.js`           | Start dev server (auto-reload)     |
+| `npm run db:generate`| `drizzle-kit generate`       | Generate SQL migrations            |
+| `npm run db:migrate` | `drizzle-kit migrate`        | Apply migrations to database       |
+| `npm run seed`       | `node src/seed/seed.js`      | Seed matches + commentary via API  |
 
-#### 4. API-Football (api-football.com)
+### Frontend
 
-| Detail       | Info                                               |
-|--------------|----------------------------------------------------|
-| **URL**      | https://www.api-football.com                       |
-| **Free Tier**| 100 requests/day via RapidAPI                      |
-| **Coverage** | 900+ leagues worldwide, including ISL (India)      |
-| **Auth**     | RapidAPI Key                                       |
-| **Docs**     | https://www.api-football.com/documentation-v3      |
+| Script              | Command         | Description               |
+|---------------------|-----------------|---------------------------|
+| `npm run dev`       | `vite`          | Start dev server          |
+| `npm run build`     | `vite build`    | Production build          |
+| `npm run preview`   | `vite preview`  | Preview production build  |
 
-**Key Endpoints:**
+<br/>
 
-```
-GET https://v3.football.api-sports.io/fixtures?live=all
-GET https://v3.football.api-sports.io/fixtures?id=FIXTURE_ID
-GET https://v3.football.api-sports.io/fixtures/events?fixture=FIXTURE_ID
+## 🌐 Deployment
+
+### Render
+
+Deploy frontend and backend separately on **Render**.
+
+```env
+# Production frontend .env
+VITE_API_BASE_URL="https://sportzengine.onrender.com"
+VITE_WS_BASE_URL="wss://sportzengine.onrender.com/ws"
 ```
 
-> ✅ This API covers **ISL (Indian Super League)** — great for Indian football data.
+### Railway
 
----
+A detailed step-by-step guide is available at **[`backend/RAILWAY_DEPLOYMENT_GUIDE.md`](./backend/RAILWAY_DEPLOYMENT_GUIDE.md)**.
 
-### 🏈 American Football (NFL)
+> **⚠️ Important:** Always use `wss://` (secure WebSocket) for production deployments over HTTPS.
 
-#### 5. ESPN API (Unofficial — Free, No Key)
+<br/>
 
-| Detail       | Info                                               |
-|--------------|----------------------------------------------------|
-| **URL**      | http://site.api.espn.com                           |
-| **Free Tier**| Unlimited (unofficial, no key required)            |
-| **Coverage** | NFL, College Football                              |
-| **Auth**     | None                                               |
+## 📊 Monitoring (APM)
 
-**Key Endpoints:**
-
-```
-GET http://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard
-GET http://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=EVENT_ID
-```
-
-**Sample Response:**
-
-```json
-{
-  "events": [
-    {
-      "id": "401547417",
-      "name": "Kansas City Chiefs at San Francisco 49ers",
-      "competitions": [{
-        "competitors": [
-          { "team": { "displayName": "49ers" }, "score": "22" },
-          { "team": { "displayName": "Chiefs" }, "score": "25" }
-        ],
-        "status": { "type": { "description": "In Progress" } }
-      }]
-    }
-  ]
-}
-```
-
----
-
-#### 6. The Sports DB (thesportsdb.com)
-
-| Detail       | Info                                               |
-|--------------|----------------------------------------------------|
-| **URL**      | https://www.thesportsdb.com/api.php                |
-| **Free Tier**| Free for non-commercial use                        |
-| **Coverage** | NFL, NBA, Cricket, Football — multi-sport          |
-| **Auth**     | Free key: `1` for testing                          |
-
-**Key Endpoints:**
-
-```
-GET https://www.thesportsdb.com/api/v1/json/1/livescore.php?s=Soccer
-GET https://www.thesportsdb.com/api/v1/json/1/livescore.php?s=Cricket
-GET https://www.thesportsdb.com/api/v1/json/1/livescore.php?s=NFL
-```
-
----
-
-## 🔧 Integration Architecture
-
-Here's how to wire a live API into your existing backend:
-
-```
-                    Every 15 seconds
-                   ┌──────────────┐
-                   │  Poller Job  │ ──► fetch() from Sports API
-                   └──────┬───────┘
-                          │
-                          ▼
-                   ┌──────────────┐
-                   │  Compare     │ ──► Check if score/events changed
-                   │  with DB     │
-                   └──────┬───────┘
-                          │ (if changed)
-                          ▼
-              ┌───────────────────────┐
-              │ INSERT new commentary │
-              │ UPDATE match score    │
-              └───────────┬───────────┘
-                          │
-                          ▼
-              ┌───────────────────────┐
-              │ broadcastToAll(wss)   │ ──► Push to all connected clients
-              └───────────────────────┘
-```
-
----
-
-## 💻 Example: Poller Service Code
-
-Create a file `backend/src/services/livePoller.js`:
+The backend uses **Site24x7 APMInsight** for application performance monitoring. Configuration is in `apminsightnode.json`. The agent is loaded at the top of `index.js` before any other imports:
 
 ```javascript
-import { db } from "../db/db.js";
-import { matches, commentary } from "../db/schema.js";
-import { eq } from "drizzle-orm";
-
-const POLL_INTERVAL_MS = 15_000; // 15 seconds
-const CRICKET_API_KEY = process.env.CRICKET_API_KEY;
-const FOOTBALL_API_KEY = process.env.FOOTBALL_API_KEY;
-
-// ─── Cricket Poller ───────────────────────────────────
-
-async function pollCricket() {
-    const res = await fetch(
-        `https://api.cricapi.com/v1/currentMatches?apikey=${CRICKET_API_KEY}`
-    );
-    const { data } = await res.json();
-
-    for (const match of data) {
-        // Upsert match into your DB
-        // Compare scores, insert commentary if changed
-        // Call broadcastCommentary() if new events
-    }
-}
-
-// ─── Football Poller ──────────────────────────────────
-
-async function pollFootball() {
-    const res = await fetch(
-        "https://api.football-data.org/v4/matches?status=LIVE",
-        { headers: { "X-Auth-Token": FOOTBALL_API_KEY } }
-    );
-    const { matches: liveMatches } = await res.json();
-
-    for (const match of liveMatches) {
-        // Map to your schema format
-        // Compare with DB, insert new commentary
-        // Broadcast updates
-    }
-}
-
-// ─── NFL Poller (No Key Required) ─────────────────────
-
-async function pollNFL() {
-    const res = await fetch(
-        "http://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-    );
-    const { events } = await res.json();
-
-    for (const event of events) {
-        // Extract teams, scores, status
-        // Update your DB
-        // Broadcast via WebSocket
-    }
-}
-
-// ─── Start Polling ────────────────────────────────────
-
-export function startPolling(broadcastFn) {
-    setInterval(async () => {
-        try {
-            await Promise.allSettled([
-                pollCricket(),
-                pollFootball(),
-                pollNFL(),
-            ]);
-        } catch (err) {
-            console.error("Polling error:", err);
-        }
-    }, POLL_INTERVAL_MS);
-
-    console.log(`📡 Live polling started (every ${POLL_INTERVAL_MS / 1000}s)`);
-}
+import AgentApi from 'apminsight';
+AgentApi.config();
 ```
 
-Then in `index.js`, wire it up:
+<br/>
 
-```javascript
-import { startPolling } from './src/services/livePoller.js';
+## 🌱 Seed System
 
-// ... existing setup ...
+The seed system (`src/seed/seed.js`) is a sophisticated match feed simulator:
 
-const { broadcastMatchCreated } = attachWebSocketServer(server);
-startPolling(broadcastMatchCreated);
-```
+- Reads 18 matches and 1080+ commentary entries from `src/data/data.json`
+- Creates matches via the REST API with **live-compatible timestamps** (auto-adjusted by `SEED_FORCE_LIVE`)
+- Inserts commentary one entry at a time with configurable delays (`DELAY_MS`)
+- **Randomizes** commentary across matches to simulate a multi-game live feed
+- **Cricket-aware**: normalizes innings order and handles batting team logic
+- **Clones commentary** from template matches to cover all sports without duplicating data
 
----
+### Seed Environment Variables
 
-## 📋 API Comparison Summary
+| Variable                      | Default       | Description                         |
+|-------------------------------|---------------|-------------------------------------|
+| `API_URL`                     | *(required)*  | Backend URL to seed against         |
+| `DELAY_MS`                    | `250`         | Ms between commentary insertions    |
+| `SEED_FORCE_LIVE`             | `true`        | Auto-adjust times to make matches live |
+| `SEED_MATCH_DURATION_MINUTES` | `120`         | Default match duration in minutes   |
 
-| API                | Sport              | Free Limit      | Key Required | Indian Sports | American Sports |
-|--------------------|--------------------|-----------------|-------------|---------------|-----------------|
-| **CricAPI**        | Cricket            | 100 req/day     | ✅          | ✅ IPL, Intl  | ❌              |
-| **CricketData.org**| Cricket            | 100 req/day     | ✅          | ✅ IPL, Intl  | ❌              |
-| **Football-Data**  | Football/Soccer    | 10 req/min      | ✅          | ❌            | ❌              |
-| **API-Football**   | Football/Soccer    | 100 req/day     | ✅          | ✅ ISL        | ❌              |
-| **ESPN (Unofficial)** | NFL, Multi    | Unlimited       | ❌          | ❌            | ✅ NFL          |
-| **TheSportsDB**    | Multi-sport        | Unlimited*      | ❌          | ✅ Cricket    | ✅ NFL          |
+<br/>
 
-\* Free for non-commercial use
+## 🤝 Contributing
 
----
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## 🎯 Recommended Combination
+<br/>
 
-For your project (Indian + American sports), use:
+## 📄 License
 
-1. **CricAPI** — for IPL and international cricket live scores
-2. **Football-Data.org** — for Premier League, La Liga, UCL
-3. **ESPN API** — for NFL (no API key needed!)
-4. **API-Football** — as a bonus for ISL (Indian Super League)
-
-This gives you coverage across **Cricket, Football, and American Football** — all with free tiers.
-
----
-
-## ⚠️ Important Notes
-
-1. **Rate Limits** — Most free APIs have daily/minute limits. Cache responses and only poll every 15–30 seconds.
-2. **No Real-time Push** — These APIs don't offer WebSocket push; you must **poll** on an interval.
-3. **Terms of Service** — ESPN API is unofficial. For production use, consider paid APIs like SportRadar or Opta.
-4. **Data Mapping** — Each API returns data in a different format. You'll need adapter functions to map their responses to your `matches` and `commentary` schema.
+This project is licensed under the ISC License.
 
 ---
 
 <p align="center">
-  <strong>Your WebSocket infrastructure is ready — just plug in the data source! 🚀</strong>
+  Built with ❤️ by <a href="https://github.com/anothercoder-nik">anothercoder-nik</a>
 </p>
