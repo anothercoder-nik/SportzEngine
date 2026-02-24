@@ -119,7 +119,7 @@ export function attachWebSocketServer(server) {
         });
 
         ws.on('error', (err) => {
-            socket.terminate();
+            console.error("WS Error:", err);
         })
     })
 
