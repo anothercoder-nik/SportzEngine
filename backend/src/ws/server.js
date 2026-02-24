@@ -1,12 +1,12 @@
 import { WebSocket, WebSocketServer } from "ws";
 
-function sendJson(socket,payload) {
-    if(socket.readyState!==WebSocket.OPEN) return;
+function sendJson(socket, payload) {
+    if (socket.readyState !== WebSocket.OPEN) return;
     socket.send(JSON.stringify(payload));
 }
 function broadcastToAll(wss, payload) {
-    for (const client of wss.clients)  {
-        if(client.readyState !== WebSocket.OPEN) continue;
+    for (const client of wss.clients) {
+        if (client.readyState !== WebSocket.OPEN) continue;
 
         client.send(JSON.stringify(payload));
     }
@@ -14,18 +14,18 @@ function broadcastToAll(wss, payload) {
 
 export function attachWebSocketServer(server) {
     const wss = new WebSocketServer({
-        server, 
+        server,
         path: '/ws',
-        maxPayload: 1024 * 1024,  
+        maxPayload: 1024 * 1024,
     })
 
 
     wss.on('connection', (ws, req) => {
-        socket.isAlive = true;
-        socket.on('pong', () => {
-            socket.isAlive = true;
+        ws.isAlive = true;
+        ws.on('pong', () => {
+            ws.isAlive = true;
         })
-        sendJson(ws, {type: 'welcome', payload: {message: 'Welcome to the WebSocket Server'}});
+        sendJson(ws, { type: 'welcome', payload: { message: 'Welcome to the WebSocket Server' } });
         ws.on('error', (err) => {
             console.error('WebSocket error:', err);
         });
@@ -33,7 +33,7 @@ export function attachWebSocketServer(server) {
 
     const interval = setInterval(() => {
         wss.clients.forEach((ws) => {
-            if(ws.isAlive === false) return ws.terminate();
+            if (ws.isAlive === false) return ws.terminate();
 
             ws.isAlive = false;
             ws.ping();
@@ -44,11 +44,11 @@ export function attachWebSocketServer(server) {
         clearInterval(interval);
     })
 
-    function broadcastMatchCreated(match){
-        broadcastToAll(wss, {type: 'match.created', data: match});
+    function broadcastMatchCreated(match) {
+        broadcastToAll(wss, { type: 'match.created', data: match });
     }
 
-    return {broadcastMatchCreated};
+    return { broadcastMatchCreated };
 }
 
 
