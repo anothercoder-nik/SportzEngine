@@ -15,6 +15,13 @@
       "when": 1771882386849,
       "tag": "0001_sad_chamber",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771939905961,
+      "tag": "0002_graceful_robbie_robertson",
+      "breakpoints": true
     }
   ]
 }

@@ -17,7 +17,7 @@ const server = http.createServer(app);
 app.use(cors());
 
 
-app.use(securityMiddleware());
+// app.use(securityMiddleware());
 app.use(express.json());
 app.get('/', (req, res) => {
   res.send('Hello from Express!');
